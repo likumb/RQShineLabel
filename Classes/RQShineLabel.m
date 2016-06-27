@@ -1,6 +1,6 @@
 //
-//  TSTextShineView.m
-//  TextShine
+//  RQShineLabel.m
+//  RQShineLabel
 //
 //  Created by Genki on 5/7/14.
 //  Copyright (c) 2014 Reteq. All rights reserved.
@@ -16,7 +16,6 @@
 @property (strong, nonatomic) CADisplayLink *displaylink;
 @property (assign, nonatomic) CFTimeInterval beginTime;
 @property (assign, nonatomic) CFTimeInterval endTime;
-@property (assign, nonatomic, getter = isFadedOut) BOOL fadedOut;
 @property (nonatomic, copy) void (^completion)();
 
 @end
@@ -64,10 +63,8 @@
 - (void)commonInit
 {
   // Defaults
+  _needShine = YES;
   _shineDuration   = 2.5;
-  _fadeoutDuration = 2.5;
-  _autoStart       = NO;
-  _fadedOut        = YES;
   self.textColor  = [UIColor whiteColor];
   
   _characterAnimationDurations = [NSMutableArray array];
@@ -78,16 +75,15 @@
   [_displaylink addToRunLoop:[NSRunLoop currentRunLoop] forMode:NSRunLoopCommonModes];
 }
 
-- (void)didMoveToWindow
-{
-  if (nil != self.window && self.autoStart) {
-    [self shine];
-  }
-}
-
 - (void)setText:(NSString *)text
 {
   self.attributedText = [[NSAttributedString alloc] initWithString:text];
+}
+
+- (void)setNeedShine:(BOOL)needShine
+{
+  _needShine = needShine;
+  self.attributedString = [self.attributedString copy];
 }
 
 -(void)setAttributedText:(NSAttributedString *)attributedText
@@ -109,24 +105,9 @@
 - (void)shineWithCompletion:(void (^)())completion
 {
   
-  if (!self.isShining && self.isFadedOut) {
+  if (!self.isShining) {
     self.completion = completion;
-    self.fadedOut = NO;
     [self startAnimationWithDuration:self.shineDuration];
-  }
-}
-
-- (void)fadeOut
-{
-  [self fadeOutWithCompletion:NULL];
-}
-
-- (void)fadeOutWithCompletion:(void (^)())completion
-{
-  if (!self.isShining && !self.isFadedOut) {
-    self.completion = completion;
-    self.fadedOut = YES;
-    [self startAnimationWithDuration:self.fadeoutDuration];
   }
 }
 
@@ -135,18 +116,12 @@
   return !self.displaylink.isPaused;
 }
 
-- (BOOL)isVisible
-{
-  return NO == self.isFadedOut;
-}
-
-
 #pragma mark - Private methods
 
 - (void)startAnimationWithDuration:(CFTimeInterval)duration
 {
   self.beginTime = CACurrentMediaTime();
-  self.endTime = self.beginTime + self.shineDuration;
+  self.endTime = self.beginTime + duration;
   self.displaylink.paused = NO;
 }
 
@@ -163,16 +138,13 @@
                                    usingBlock:^(id value, NSRange range, BOOL *stop) {
                                      
                                      CGFloat currentAlpha = CGColorGetAlpha([(UIColor *)value CGColor]);
-                                     BOOL shouldUpdateAlpha = (self.isFadedOut && currentAlpha > 0) || (!self.isFadedOut && currentAlpha < 1) || (now - self.beginTime) >= [self.characterAnimationDelays[i] floatValue];
+                                     BOOL shouldUpdateAlpha = currentAlpha < 1 || (now - self.beginTime) >= [self.characterAnimationDelays[i] floatValue];
                                      
                                      if (!shouldUpdateAlpha) {
                                        return;
                                      }
                                      
                                      CGFloat percentage = (now - self.beginTime - [self.characterAnimationDelays[i] floatValue]) / ( [self.characterAnimationDurations[i] floatValue]);
-                                     if (self.isFadedOut) {
-                                       percentage = 1 - percentage;
-                                     }
                                      UIColor *color = [self.textColor colorWithAlphaComponent:percentage];
                                      [self.attributedString addAttribute:NSForegroundColorAttributeName value:color range:range];
                                    }];
@@ -189,7 +161,8 @@
 - (NSMutableAttributedString *)initialAttributedStringFromAttributedString:(NSAttributedString *)attributedString
 {
   NSMutableAttributedString *mutableAttributedString = [attributedString mutableCopy];
-  UIColor *color = [self.textColor colorWithAlphaComponent:0];
+  CGFloat alpha = self.needShine ? 0 : 1;
+  UIColor *color = [self.textColor colorWithAlphaComponent:alpha];
   [mutableAttributedString addAttribute:NSForegroundColorAttributeName value:color range:NSMakeRange(0, mutableAttributedString.length)];
   return mutableAttributedString;
 }
